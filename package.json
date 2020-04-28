@@ -1,0 +1,30 @@
+{
+  "name": "conworld-projects-planet",
+  "version": "0.0.1",
+  "description": "A 3d rendering of a fantasy planet using three.js.",
+  "private": true,
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "webpack-dev-server --open",
+    "build": "webpack"
+  },
+  "author": "gracefuljs",
+  "license": "ISC",
+  "dependencies": {
+    "three": "^0.115.0",
+    "webpack": "^4.43.0"
+  },
+  "devDependencies": {
+    "webpack-cli": "^3.3.11",
+    "webpack-dev-server": "^3.10.3"
+  },
+  "main": "webpack.config.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gracefuljs/conworld-projects-planet.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gracefuljs/conworld-projects-planet/issues"
+  },
+  "homepage": "https://github.com/gracefuljs/conworld-projects-planet#readme"
+}
