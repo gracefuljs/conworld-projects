@@ -1,49 +1,53 @@
 import * as THREE from "three";
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
+
+//--------------------Init--------------------------//
 const scene = new THREE.Scene();
 
-/*We'll use the Orthographic Camera instead so that the globe won't
-distort due to perspective.*/
+//camera variables
+const cameraLeft  = window.innerWidth  / -2;
+const cameraRight = window.innerWidth  / 2;
+const cameraUp    = window.innerHeight / 2;
+const cameraDown  = window.innerHeight / -2;
+const cameraNear  = 0.1;
+const cameraFar   = 1000;
 
-/*This set up will put the origin of the projection grid in the center of the screen, 
-with left and bottom being the negative axis and right top being positive.
--If we wanted the origin at the top left corner, then set the left and top to 0 and the right and bottom to the container's width.*/
-const camera = new THREE.OrthographicCamera(
-      window.innerWidth / -2, //left side of the projection box
-      window.innerWidth / 2, //right side
-      window.innerHeight / 2, //top
-      window.innerHeight / -2, //bottom
-      0.1, //near
-      1000 //far
-    );
+const camera = new THREE.OrthographicCamera(cameraLeft, cameraRight, cameraUp, cameraDown, cameraNear, cameraFar);
+camera.position.set( 0, 0, 500 );
 
-//the camera position defaults to (0, 0, 0), so move it a bit along the z-axis so it and 
-//the rest of the scene aren't on top of each other
-camera.position.set( 0, 0, 500 );//since we're using an orthographic camera, the actual distance from the camera doesn't matter.
-
-
+//renderer
 const renderer = new THREE.WebGLRenderer();
-
-//set the renderer size to full screen and 
 renderer.setSize( window.innerWidth, window.innerHeight);
-
-//set the renderer to the device's pixel ratio to keep the image crisp across all devices
 renderer.setPixelRatio( window.devicePixelRatio );
 
-//add to the document body
+
+//add renderer to the document
 document.body.appendChild(renderer.domElement);
 
 
+//controls
+const controls = new OrbitControls(camera, renderer.domElement);
 
-//Give the ability resize the renderer when the window is resized.
 
-//the 'onResize' event listener is only on the window object, so we'll put the callback on that. 
-window.addEventListener('resize', onWindowResize, false);
+//create globe
+let sphereGeometry = new THREE.SphereBufferGeometry(150, 32, 32);
+const texture  = new THREE.TextureLoader().load("images/world_map.jpg");
+const material = new THREE.MeshBasicMaterial({map:texture});
+const globe    = new THREE.Mesh(sphereGeometry, material);
+
+scene.add(globe);
+
+//globe variables
+const GLOBESTOPTIME = 60; //roughly 1 second, in frames (60fps * 1)
+let selectedObject  = null;
+let globeClicked    = false;
+let pausedTimeLeft  = 0;
+let globePaused     = false;
+let infoCardVisible = false;
+
 
 function onWindowResize(){
-	//for perspective cameras, we would use camera.aspect to change the aspect ratio,
-	//but since orthographic cameras don't need to work that way, we need to set the coordinates of each corner manually
 	camera.left   = window.innerWidth  / -2;
     camera.right  = window.innerWidth  /  2;
     camera.top    = window.innerHeight /  2;
@@ -55,47 +59,35 @@ function onWindowResize(){
 	renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-//create a geometry that contains all the verticies and faces that
-let sphereGeometry = new THREE.SphereBufferGeometry(
-	150, //radius: float 
-	32, //widthSegments: the number of horizontal segments
-	32//heightSegments: the number of vertical segments
-);//there are more, but these are all that are required
-
-//asynchronously load a texture
-const texture = new THREE.TextureLoader().load("images/world_map.jpg")
-
-//create a basic "skin" for the geometry
-const material = new THREE.MeshBasicMaterial({map:texture});
-
-//combine the geometry and skin together to get a finished object, called a Mesh
-const globe = new THREE.Mesh(sphereGeometry, material);
-
-//add it to the scene. Default coordinates (0, 0, 0)
-scene.add(globe);
 
 
-//------------- Making the globe interactive-------------------//
+//--------------------Making The GUI----------------------//
 
-//adding orbit controls to allow the camera to rotate the globe
-//we'll replace this later in order to rotate the actual globe
-let controls = new OrbitControls(camera, renderer.domElement);
+const infoCard = document.createElement("div");
+infoCard.classList.add("info-card", "hidden");
 
-//when the globe is clicked, it stops spinning for roughly 10 seconds
-//since we will put this on the animate function, which is called roughly 60
-//times a second, we will need a count of 600 for 10 seconds
-const GLOBESTOPTIME = 600;
+document.body.appendChild(infoCard);  
 
-//for our mousedown function to know if what we clicked is actually the globe
-let selectedObject = null;
 
-//track when the mouse is clicked and how long it's been since it was clicked
-let globeClicked = false;
-let timeSinceClicked = 0;
+function showInfoCard(country="Globe"){
+	let info = country;
+	infoCard.innerHTML = info;
+	infoCard.classList.remove("hidden");
+	infoCardVisible = true;
+}
 
-//We'll be using the raycasting method to figure out if the mouse clicked on an object
+function hideInfoCard(){
+	infoCard.classList.add("hidden");
+	infoCardVisible = false;
+}
+
+
+
+//-----------------------User Interaction------------------------------------//
 let mouseRaycaster = new THREE.Raycaster();
-let mousePos = new THREE.Vector2()
+let mousePos = new THREE.Vector2();
+let isMouseDown = false;
+let checkMouseDown = null;
 
 //track the mouse position with mouse movements
 function onMouseMove(event){
@@ -104,38 +96,62 @@ function onMouseMove(event){
 	mousePos.y = (event.clientY / window.innerHeight) * -2 + 1;
 };
 
+function activateMoveGlobe(){
+	isMouseDown = true;
+}
+
+function deactivateMoveGlobe(){
+	globePaused = true;
+	pausedTimeLeft = GLOBESTOPTIME;
+	isMouseDown = false;
+}
+
 function onMouseDown(event){
 	if(selectedObject){
 		globeClicked = true;
-		timeSinceClicked = 0;
-	};
+		checkMouseDown = setTimeout(activateMoveGlobe, 300);
+	}
 };
+
+function onMouseUp(event){
+	clearTimeout(checkMouseDown);
+	deactivateMoveGlobe();
+}
+
+// function onMouseDown(event){
+// 	if(selectedObject){
+// 		globeClicked = true;
+// 		timeSinceClicked = 0;
+// 		showInfoCard("Test");
+// 	}
+
+// 	else if(infoCardVisible){
+// 		hideInfoCard();
+// 	}
+// };
 
 
 function elapseClickTimer(){
-	if(!globeClicked) return;
+	if(!globePaused || isMouseDown) return;
 	
-	if( timeSinceClicked >= GLOBESTOPTIME ){
+	if( pausedTimeLeft <= 0 ){
 		globeClicked = false;
-		timeSinceClicked = 0;
+		pausedTimeLeft = 0;
+		globePaused = false;
 	}
 
 	else{
-		timeSinceClicked ++
+		pausedTimeLeft --;
 	}
 }
 
 function selectObject(){
-	
-	//cast a ray from the camera through the projection box
+
 	mouseRaycaster.setFromCamera(mousePos, camera);
 	
-	//get a list of objects that the ray intersected.
 	let intersectedObjects = mouseRaycaster.intersectObjects(scene.children);
 
-	//if there are any objects in the list
 	if(intersectedObjects.length > 0){
-		//pick the first object, since it what the ray intersected first and therefore the closest
 		selectedObject = intersectedObjects[0].object;
 	}
 
@@ -148,19 +164,19 @@ function selectObject(){
 
 window.addEventListener("mousemove", onMouseMove, false);
 window.addEventListener("mousedown", onMouseDown, false);
+window.addEventListener("mouseup", onMouseUp, false);
+window.addEventListener('resize', onWindowResize, false);
+
+
+
 
 //-------------------Begin Rendering---------------------------//
 
-//nothing is rendered until the render method on the renderer is called
 function animate(){
-	//run the raycaster script
 	selectObject();
-
-	//make an animation loop
 	requestAnimationFrame(animate);
 	
 	if(!globeClicked){
-		//remember, this unit isn't pixels.
 		globe.rotation.y += 0.005;
 	}
 
@@ -169,7 +185,4 @@ function animate(){
 	renderer.render(scene, camera);
 };
 
-//start animating
 animate();
-
-console.log(scene.children)
